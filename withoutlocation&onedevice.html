@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attendance System</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: linear-gradient(135deg, #74ebd5, #acb6e5);
+        padding: 20px;
+        text-align: center;
+      }
+      h1 {
+        color: #333;
+      }
+      input,
+      select,
+      button {
+        padding: 10px;
+        margin: 5px;
+        border-radius: 8px;
+        border: none;
+      }
+      button {
+        cursor: pointer;
+        background: #4b79a1;
+        color: white;
+        font-weight: bold;
+      }
+      button:hover {
+        background: #283e51;
+      }
+      .hidden {
+        display: none;
+      }
+      video,
+      canvas {
+        width: 100%;
+        max-width: 400px;
+        border-radius: 12px;
+        margin: 10px auto;
+        display: block;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      }
+      #studentStatus,
+      #facultyStatus {
+        margin-top: 15px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #222;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>📌 Attendance System</h1>
+
+    <!-- Login Section -->
+    <div id="loginSection">
+      <h2>Login</h2>
+      <select id="roleSelect">
+        <option value="student">Student</option>
+        <option value="faculty">Faculty</option></select
+      ><br />
+      <input type="text" id="rollInput" placeholder="Enter Roll Number" />
+      <br />
+      <button onclick="loginRole()">Login</button>
+    </div>
+
+    <!-- Student Section -->
+    <div id="studentSection" class="hidden">
+      <h2>Welcome Student</h2>
+      <video id="camera" autoplay></video>
+      <canvas id="snapshot"></canvas>
+      <div>
+        <button onclick="submitAttendance()">✅ Submit Attendance</button>
+        <button onclick="logoutStudent()">🚪 Exit Attendance</button>
+        <button onclick="openMonthlyAttendance()">📊 Monthly Attendance</button>
+      </div>
+      <div id="studentStatus"></div>
+    </div>
+
+    <!-- Faculty Section -->
+    <div id="facultySection" class="hidden">
+      <h2>Welcome Faculty</h2>
+      <button onclick="viewToday()">📋 View Today’s Attendance</button>
+      <button onclick="openMonthlyAttendance()">
+        📊 View Monthly Attendance
+      </button>
+      <button onclick="logoutFaculty()">🚪 Exit</button>
+      <div id="facultyStatus"></div>
+      <div id="facultyData"></div>
+    </div>
+
+    <script>
+      const video = document.getElementById("camera");
+      const canvas = document.getElementById("snapshot");
+      let stream = null;
+      let currentUser = null;
+      let currentRole = null;
+
+      let attendance = {}; // { roll: { date: { loginTime, exitTime, image } } }
+
+      // Generate Roll Numbers 23KD1A1501 ... 23KD1A1572
+      const rollNumbers = Array.from(
+        { length: 72 },
+        (_, i) => "23KD1A15" + String(i + 1).padStart(2, "0")
+      );
+
+      function loginRole() {
+        currentRole = document.getElementById("roleSelect").value;
+        const roll = document.getElementById("rollInput").value.trim();
+
+        if (!roll) {
+          alert("Enter your roll number!");
+          return;
+        }
+
+        currentUser = roll;
+        document.getElementById("loginSection").classList.add("hidden");
+
+        const today = new Date().toISOString().split("T")[0];
+        if (!attendance[currentUser]) attendance[currentUser] = {};
+        if (!attendance[currentUser][today])
+          attendance[currentUser][today] = {};
+
+        attendance[currentUser][today].loginTime =
+          new Date().toLocaleTimeString();
+
+        if (currentRole === "student") {
+          document.getElementById("studentSection").classList.remove("hidden");
+          document.getElementById(
+            "studentStatus"
+          ).innerText = `🕒 Login Time: ${attendance[currentUser][today].loginTime}`;
+          openCamera();
+        } else {
+          document.getElementById("facultySection").classList.remove("hidden");
+          document.getElementById(
+            "facultyStatus"
+          ).innerText = `🕒 Faculty Login Time: ${attendance[currentUser][today].loginTime}`;
+        }
+      }
+
+      // Camera
+      function openCamera() {
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then((ms) => {
+            stream = ms;
+            video.srcObject = ms;
+            video.style.display = "block";
+          })
+          .catch((err) => alert("Camera error: " + err));
+      }
+
+      // Submit Attendance (Student)
+      function submitAttendance() {
+        if (!stream) return alert("Camera not available!");
+
+        const ctx = canvas.getContext("2d");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.style.display = "block";
+
+        // Stop camera after capture
+        stream.getTracks().forEach((track) => track.stop());
+        video.style.display = "none";
+        stream = null;
+
+        const today = new Date().toISOString().split("T")[0];
+        attendance[currentUser][today].image = canvas.toDataURL("image/png");
+
+        document.getElementById(
+          "studentStatus"
+        ).innerText += `\n✅ Attendance Submitted at ${new Date().toLocaleTimeString()}`;
+      }
+
+      // Student Exit
+      function logoutStudent() {
+        const today = new Date().toISOString().split("T")[0];
+        attendance[currentUser][today].exitTime =
+          new Date().toLocaleTimeString();
+        document.getElementById(
+          "studentStatus"
+        ).innerText += `\n🚪 Exit Time: ${attendance[currentUser][today].exitTime}`;
+
+        // Reset UI for next login
+        setTimeout(() => {
+          document.getElementById("studentSection").classList.add("hidden");
+          document.getElementById("loginSection").classList.remove("hidden");
+          document.getElementById("rollInput").value = "";
+          currentUser = null;
+          currentRole = null;
+        }, 1500);
+      }
+
+      // Faculty Exit
+      function logoutFaculty() {
+        const today = new Date().toISOString().split("T")[0];
+        attendance[currentUser][today].exitTime =
+          new Date().toLocaleTimeString();
+        document.getElementById(
+          "facultyStatus"
+        ).innerText += `\n🚪 Exit Time: ${attendance[currentUser][today].exitTime}`;
+
+        setTimeout(() => {
+          document.getElementById("facultySection").classList.add("hidden");
+          document.getElementById("loginSection").classList.remove("hidden");
+          document.getElementById("rollInput").value = "";
+          currentUser = null;
+          currentRole = null;
+        }, 1500);
+      }
+
+      // Faculty - Today view
+      function viewToday() {
+        const today = new Date().toISOString().split("T")[0];
+        let html =
+          "<h3>Today’s Attendance</h3><table border='1'><tr><th>Roll</th><th>Login</th><th>Exit</th><th>Image</th></tr>";
+        for (let roll in attendance) {
+          if (attendance[roll][today]) {
+            html += `<tr>
+                  <td>${roll}</td>
+                  <td>${attendance[roll][today].loginTime || "-"}</td>
+                  <td>${attendance[roll][today].exitTime || "-"}</td>
+                  <td>${
+                    attendance[roll][today].image
+                      ? `<img src="${attendance[roll][today].image}" width="80">`
+                      : "-"
+                  }</td>
+                 </tr>`;
+          }
+        }
+        html += "</table>";
+        document.getElementById("facultyData").innerHTML = html;
+      }
+
+      // Monthly Attendance
+      function openMonthlyAttendance() {
+        const now = new Date();
+        const daysInMonth = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0
+        ).getDate();
+
+        let html = "<h2>Monthly Attendance</h2>";
+        html += "<table border='1'><tr><th>Roll No</th>";
+        for (let d = 1; d <= daysInMonth; d++) {
+          html += `<th>${d}</th>`;
+        }
+        html += "<th>%</th></tr>";
+
+        // Student Rows
+        for (let roll of rollNumbers) {
+          let presentDays = 0;
+          html += `<tr><td>${roll}</td>`;
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateKey = `${now.getFullYear()}-${String(
+              now.getMonth() + 1
+            ).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            if (
+              attendance[roll] &&
+              attendance[roll][dateKey] &&
+              attendance[roll][dateKey].loginTime
+            ) {
+              html += `<td style="background:#d4edda">P</td>`;
+              presentDays++;
+            } else {
+              html += `<td style="background:#f8d7da">A</td>`;
+            }
+          }
+          const percent = ((presentDays / daysInMonth) * 100).toFixed(1);
+          html += `<td><b>${percent}%</b></td></tr>`;
+        }
+
+        html += "</table>";
+
+        const newTab = window.open("", "_blank");
+        newTab.document.write(
+          "<html><head><title>Monthly Attendance</title></head><body>" +
+            html +
+            "</body></html>"
+        );
+        newTab.document.close();
+      }
+    </script>
+  </body>
+</html>
